@@ -1,1 +1,18 @@
+# Data files
+*.csv
+*.xlsx
+*.parquet
+data/
+datasets/
 
+# Models
+models/
+*.pkl
+*.joblib
+
+# Logs
+*.log
+
+# IDE configs
+.vscode/
+.idea/

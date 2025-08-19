@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stock Market Prediction Dashboard</title>
+    <!-- Tailwind via CDN for quick prototyping -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for chart placeholders -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Custom styles to layer background images and gradient overlays */
+        .hero-bg {
+            background-image: linear-gradient(rgba(7, 10, 24, 0.55), rgba(7, 10, 24, 0.55)),
+                url('https://images.unsplash.com/photo-1565372912295-6b3a0b39c5f8?auto=format&fit=crop&w=1950&q=80');
+            background-size: cover;
+            background-position: center;
+        }
+
+        .accent-card {
+            backdrop-filter: blur(6px);
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Small decorative stock chart background */
+        .pattern {
+            background-image: url('https://images.unsplash.com/photo-1526378721146-6b5f8edb1b3f?auto=format&fit=crop&w=1400&q=60');
+            background-size: cover;
+            background-position: center;
+            opacity: 0.08;
+        }
+
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid #10B981;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #FCA5A5;
+        }
+
+        .success-message {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: #6EE7B7;
+        }
+
+        .back-button {
+            backdrop-filter: blur(6px);
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen font-sans text-slate-100 bg-slate-900">
+    <!-- Navigation with Back Button -->
+    <nav class="p-6">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-4">
+                <button onclick="goBack()"
+                    class="back-button px-4 py-2 rounded-lg hover:bg-white/10 transition flex items-center space-x-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    <span>Back to Home</span>
+                </button>
+
+                <div class="flex items-center space-x-3">
+                    <div
+                        class="w-8 h-8 bg-gradient-to-br from-emerald-400 to-blue-600 rounded-lg flex items-center justify-center">
+                        <span class="text-white font-bold text-sm">₹</span>
+                    </div>
+                    <span class="text-lg font-bold">Stock Dashboard</span>
+                </div>
+            </div>
+
+            <div class="text-sm text-slate-400">
+                Real-time Stock Predictions
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO / HEADER -->
+    <header class="hero-bg min-h-[48vh] flex items-center">
+        <div class="container mx-auto px-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                <div class="space-y-6">
+                    <h1 class="text-4xl md:text-5xl font-extrabold leading-tight">Stock Market Prediction Dashboard</h1>
+                    <p class="text-slate-200 max-w-xl">Explore predictions powered by machine learning. Enter a stock
+                        symbol,
+                        choose a model, and visualise forecasts with interactive charts.</p>
+
+                    <div class="flex gap-3 flex-wrap">
+                        <a href="#predictor"
+                            class="inline-block px-4 py-2 bg-emerald-500 rounded-lg font-medium shadow hover:bg-emerald-400 transition">Make
+                            a Prediction</a>
+                        <button id="loadSymbols"
+                            class="inline-block px-4 py-2 border border-slate-300/10 rounded-lg hover:bg-white/5 transition">Load
+                            Symbols</button>
+                    </div>
+                </div>
+
+                <!-- Quick summary card -->
+                <div class="accent-card p-6 rounded-2xl shadow-2xl">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-slate-300">API Status</p>
+                            <p class="text-2xl font-semibold" id="apiStatus">Checking...</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm" id="symbolCount">-</p>
+                            <p class="text-xs text-slate-400">Available Symbols</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <canvas id="miniChart" height="80"></canvas>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN -->
+    <main class="container mx-auto px-6 -mt-16">
+        <!-- Status Messages -->
+        <div id="messageContainer" class="mb-4"></div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Left: Predictor Form -->
+            <section id="predictor" class="lg:col-span-1 accent-card p-6 rounded-2xl">
+                <h2 class="text-xl font-semibold mb-4">Predict a Stock</h2>
+                <form id="predictForm" class="space-y-4">
+                    <div>
+                        <label for="symbol" class="block text-sm text-slate-300 mb-1">Stock Symbol</label>
+                        <input id="symbol" name="symbol" type="text" placeholder="e.g. TCS, INFY" required
+                            class="w-full px-4 py-2 rounded-md bg-transparent border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button type="submit" class="flex-1 px-4 py-2 bg-emerald-500 rounded-md font-medium"
+                            id="predictBtn">
+                            <span id="predictBtnText">Predict</span>
+                        </button>
+                        <button type="button" id="resetBtn" class="px-4 py-2 border rounded-md">Reset</button>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button type="button" id="trainBtn"
+                            class="flex-1 px-4 py-2 bg-blue-500 rounded-md font-medium text-sm">
+                            <span id="trainBtnText">Train Model</span>
+                        </button>
+                    </div>
+
+                    <p class="text-xs text-slate-400">Enter a stock symbol and click Predict. If no model exists, it
+                        will be trained automatically.</p>
+                </form>
+
+                <!-- Available Symbols -->
+                <div id="symbolsList" class="mt-6 p-3 rounded-md bg-slate-800/50 border border-slate-700 text-sm">
+                    <strong>Available Symbols:</strong>
+                    <div id="symbolsContent" class="mt-2 text-xs">
+                        Click "Load Symbols" to fetch from server
+                    </div>
+                </div>
+            </section>
+
+            <!-- Middle: Chart area -->
+            <section class="lg:col-span-2 accent-card p-6 rounded-2xl">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold">Forecast Chart</h3>
+                        <p class="text-sm text-slate-400">Predicted vs actual values visualised for the selected stock.
+                        </p>
+                        <p class="text-xs text-slate-500 mt-1" id="currentSymbol">No symbol selected</p>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button id="downloadBtn" class="px-3 py-2 border rounded-md text-sm">Download CSV</button>
+                        <button id="snapshotBtn" class="px-3 py-2 border rounded-md text-sm">Snapshot</button>
+                    </div>
+                </div>
+
+                <div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="p-3 rounded-lg bg-slate-900/40">
+                        <canvas id="forecastChart" height="220"></canvas>
+                    </div>
+
+                    <div class="p-3 rounded-lg bg-slate-900/40">
+                        <h4 class="text-sm font-medium mb-2">Model Metrics</h4>
+                        <ul class="text-sm text-slate-300 space-y-2">
+                            <li>R² Score: <span id="r2Val" class="font-semibold">—</span></li>
+                            <li>RMSE: <span id="rmseVal" class="font-semibold">—</span></li>
+                            <li>MAE: <span id="maeVal" class="font-semibold">—</span></li>
+                        </ul>
+
+                        <div class="mt-4 text-xs">
+                            <p class="text-slate-300">Next Day Prediction: <span id="nextPrediction"
+                                    class="font-semibold text-emerald-400">—</span></p>
+                        </div>
+
+                        <div class="mt-4 text-xs text-slate-400">Real-time metrics calculated from ML model predictions.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Patterned footer graphic -->
+                <div class="mt-6 p-4 rounded-lg pattern"></div>
+            </section>
+
+        </div>
+
+        <!-- About / Footer -->
+        <section id="about" class="mt-10 text-slate-300">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="accent-card p-6 rounded-2xl">
+                    <h4 class="font-semibold">How it works</h4>
+                    <p class="mt-2 text-sm">This system uses XGBoost regression models trained on historical NSE data.
+                        Features include OHLC prices, volume, and moving averages (MA5, MA10).</p>
+                </div>
+
+                <div class="accent-card p-6 rounded-2xl">
+                    <h4 class="font-semibold">Backend Integration</h4>
+                    <p class="mt-2 text-sm">Connected to Flask API server with endpoints:</p>
+                    <ul class="mt-2 text-xs space-y-1">
+                        <li>• <code>/api/predict</code> - Make predictions</li>
+                        <li>• <code>/api/train</code> - Train new models</li>
+                        <li>• <code>/api/symbols</code> - Get available symbols</li>
+                        <li>• <code>/api/status</code> - Check server status</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="container mx-auto px-6 mt-12 mb-12 text-center text-slate-500 text-sm">
+        Built with ❤️ — Stock Market Prediction Dashboard • Connected to ML Backend
+    </footer>
+
+    <!-- Scripts: API integration and chart handling -->
+    <script>
+        // Configuration
+        const API_BASE_URL = 'http://localhost:5000/api';
+        let availableSymbols = [];
+
+        // Navigation function
+        function goBack() {
+            if (window.location.origin.includes('localhost:5000') || window.location.origin.includes('127.0.0.1:5000')) {
+                window.location.href = '/';
+            } else {
+                window.location.href = 'welcome.html';
+            }
+        }
+
+        // UI Elements
+        const form = document.getElementById('predictForm');
+        const predictBtn = document.getElementById('predictBtn');
+        const trainBtn = document.getElementById('trainBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const loadSymbolsBtn = document.getElementById('loadSymbols');
+        const messageContainer = document.getElementById('messageContainer');
+
+        // Utility functions
+        function showMessage(message, type = 'info') {
+            const alertClass = type === 'error' ? 'error-message' : type === 'success' ? 'success-message' : 'accent-card';
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `p-3 rounded-md ${alertClass} text-sm mb-2`;
+            messageDiv.textContent = message;
+
+            messageContainer.appendChild(messageDiv);
+
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.parentNode.removeChild(messageDiv);
+                }
+            }, 5000);
+        }
+
+        function setLoading(element, isLoading, originalText) {
+            if (isLoading) {
+                element.innerHTML = `<span class="spinner"></span>${originalText}...`;
+                element.disabled = true;
+                element.classList.add('loading');
+            } else {
+                element.innerHTML = originalText;
+                element.disabled = false;
+                element.classList.remove('loading');
+            }
+        }
+
+        // API functions
+        async function apiCall(endpoint, method = 'GET', data = null) {
+            try {
+                const config = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                };
+
+                if (data) {
+                    config.body = JSON.stringify(data);
+                }
+
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'API request failed');
+                }
+
+                return result;
+            } catch (error) {
+                console.error('API call failed:', error);
+                throw error;
+            }
+        }
+
+        // Chart initialization
+        const miniCtx = document.getElementById('miniChart').getContext('2d');
+        new Chart(miniCtx, {
+            type: 'line',
+            data: {
+                labels: Array.from({ length: 12 }, (_, i) => i + 1),
+                datasets: [{
+                    data: [12, 14, 9, 16, 18, 20, 22, 21, 23, 24, 26, 28],
+                    fill: false,
+                    tension: 0.3,
+                    borderWidth: 2,
+                    borderColor: '#10B981'
+                }]
+            },
+            options: {
+                plugins: { legend: { display: false } },
+                scales: { x: { display: false }, y: { display: false } }
+            }
+        });
+
+        // Main forecast chart
+        const forecastCtx = document.getElementById('forecastChart').getContext('2d');
+        const forecastChart = new Chart(forecastCtx, {
+            type: 'line',
+            data: {
+                labels: ['No Data'],
+                datasets: [
+                    {
+                        label: 'Actual',
+                        data: [0],
+                        fill: false,
+                        tension: 0.2,
+                        borderWidth: 2,
+                        borderColor: '#3B82F6'
+                    },
+                    {
+                        label: 'Predicted',
+                        data: [0],
+                        fill: false,
+                        tension: 0.2,
+                        borderDash: [6, 4],
+                        borderWidth: 2,
+                        borderColor: '#10B981'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { labels: { color: '#e6eef8' } } },
+                scales: {
+                    x: { ticks: { color: '#cbd5e1' } },
+                    y: { ticks: { color: '#cbd5e1' } }
+                }
+            }
+        });
+
+        // Event Handlers
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+            const symbol = formData.get('symbol').trim().toUpperCase();
+
+            if (!symbol) {
+                showMessage('Please enter a stock symbol', 'error');
+                return;
+            }
+
+            setLoading(predictBtn, true, 'Predict');
+
+            try {
+                const response = await apiCall('/predict', 'POST', { symbol });
+                updateCharts(response);
+                document.getElementById('currentSymbol').textContent = `Current: ${response.symbol}`;
+                showMessage(`Prediction completed for ${response.symbol}`, 'success');
+            } catch (error) {
+                showMessage(`Prediction failed: ${error.message}`, 'error');
+            } finally {
+                setLoading(predictBtn, false, 'Predict');
+            }
+        });
+
+        trainBtn.addEventListener('click', async () => {
+            const symbol = document.getElementById('symbol').value.trim().toUpperCase();
+
+            if (!symbol) {
+                showMessage('Please enter a stock symbol first', 'error');
+                return;
+            }
+
+            setLoading(trainBtn, true, 'Train Model');
+
+            try {
+                const response = await apiCall('/train', 'POST', { symbol });
+                showMessage(`Model trained successfully for ${response.symbol}. R²: ${response.metrics.r2.toFixed(3)}`, 'success');
+            } catch (error) {
+                showMessage(`Training failed: ${error.message}`, 'error');
+            } finally {
+                setLoading(trainBtn, false, 'Train Model');
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            form.reset();
+            forecastChart.data.labels = ['No Data'];
+            forecastChart.data.datasets[0].data = [0];
+            forecastChart.data.datasets[1].data = [0];
+            forecastChart.update();
+
+            document.getElementById('r2Val').textContent = '—';
+            document.getElementById('rmseVal').textContent = '—';
+            document.getElementById('maeVal').textContent = '—';
+            document.getElementById('nextPrediction').textContent = '—';
+            document.getElementById('currentSymbol').textContent = 'No symbol selected';
+        });
+
+        loadSymbolsBtn.addEventListener('click', async () => {
+            setLoading(loadSymbolsBtn, true, 'Load Symbols');
+
+            try {
+                const response = await apiCall('/symbols');
+                availableSymbols = response.symbols;
+
+                const symbolsContent = document.getElementById('symbolsContent');
+                if (availableSymbols.length > 0) {
+                    symbolsContent.innerHTML = availableSymbols.slice(0, 20).join(', ') +
+                        (availableSymbols.length > 20 ? `... (+${availableSymbols.length - 20} more)` : '');
+                } else {
+                    symbolsContent.innerHTML = 'No symbols available';
+                }
+
+                showMessage(`Loaded ${availableSymbols.length} symbols`, 'success');
+            } catch (error) {
+                showMessage(`Failed to load symbols: ${error.message}`, 'error');
+            } finally {
+                setLoading(loadSymbolsBtn, false, 'Load Symbols');
+            }
+        });
+
+        function updateCharts(response) {
+            forecastChart.data.labels = response.labels;
+            forecastChart.data.datasets[0].data = response.actual;
+            forecastChart.data.datasets[1].data = response.predicted;
+            forecastChart.update();
+
+            document.getElementById('r2Val').textContent = response.metrics.r2.toFixed(4);
+            document.getElementById('rmseVal').textContent = response.metrics.rmse.toFixed(2);
+            document.getElementById('maeVal').textContent = response.metrics.mae.toFixed(2);
+
+            if (response.next_prediction) {
+                document.getElementById('nextPrediction').textContent = `₹${response.next_prediction.toFixed(2)}`;
+            }
+        }
+
+        // Download CSV functionality
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            const labels = forecastChart.data.labels;
+            const actual = forecastChart.data.datasets[0].data;
+            const predicted = forecastChart.data.datasets[1].data;
+            let csv = 'date,actual,predicted\n';
+            for (let i = 0; i < labels.length; i++) {
+                csv += `${labels[i]},${actual[i] ?? ''},${predicted[i] ?? ''}\n`;
+            }
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'forecast.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // Snapshot functionality
+        document.getElementById('snapshotBtn').addEventListener('click', () => {
+            const url = forecastChart.toBase64Image();
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'forecast.png';
+            a.click();
+        });
+
+        // Initialize app
+        async function initializeApp() {
+            try {
+                const status = await apiCall('/status');
+                document.getElementById('apiStatus').textContent = status.status === 'running' ? '🟢 Connected' : '🔴 Offline';
+                document.getElementById('symbolCount').textContent = `${status.available_symbols} symbols`;
+
+                if (status.data_loaded) {
+                    showMessage('Backend connected successfully!', 'success');
+                    // Auto-load symbols
+                    loadSymbolsBtn.click();
+                } else {
+                    showMessage('Backend connected but data not loaded', 'error');
+                }
+            } catch (error) {
+                document.getElementById('apiStatus').textContent = '🔴 Offline';
+                document.getElementById('symbolCount').textContent = 'Connection failed';
+                showMessage('Failed to connect to backend. Make sure the Flask server is running on port 5000.', 'error');
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+    </script>
+</body>
+
+</html>
